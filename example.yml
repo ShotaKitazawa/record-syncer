@@ -1,0 +1,4 @@
+# this file is example of filter.yml passed by --filter-file option
+- matchRule: ".*"
+  Replacement: "__REPLACEMENT__"
+
