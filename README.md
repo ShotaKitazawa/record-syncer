@@ -6,7 +6,7 @@ record-syncer syncs from etcd (used by CoreDNS) to Google CloudDNS.
 
 ### Motivation
 
-Want to register pairs of home domains (managed by internal CoreDNS) and home's global address to Google CloudDNS.
+Want to register pairs of home domains (managed by internal CoreDNS) and home's global address to Google CloudDNS as A record.
 
 ### Usage
 
