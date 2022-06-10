@@ -23,8 +23,12 @@ type Config struct {
 	GcpDnsManagedZone string
 }
 
-func Load(version string) (Config, error) {
-	conf := Config{}
+func Load(version, commit string) (Config, error) {
+	var showVersion bool
+	flag.BoolVar(&showVersion, "version", false,
+		"show version")
+
+	var conf Config
 	flag.StringVar(&conf.FilterFile, "filter-file", "",
 		"filename written in filter rules")
 	flag.BoolVar(&conf.IsDebug, "is-debug", false,
@@ -54,6 +58,11 @@ func Load(version string) (Config, error) {
 		}
 	})
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("Version: %s (Commit: %s)\n", version, commit)
+		return Config{}, fmt.Errorf("")
+	}
 
 	if conf.FilterFile == "" {
 		return Config{}, fmt.Errorf("flag --filter-file is required")

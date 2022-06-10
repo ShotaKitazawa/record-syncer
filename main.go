@@ -18,7 +18,8 @@ import (
 )
 
 var (
-	appVersion = "ldflags_is_not_specified"
+	appVersion = "not_specified"
+	appCommit  = "not_specified"
 )
 
 const (
@@ -29,7 +30,7 @@ func main() {
 	ctx := context.Background()
 
 	// from env vars
-	conf, err := config.Load(appVersion)
+	conf, err := config.Load(appVersion, appCommit)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
