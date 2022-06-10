@@ -26,27 +26,27 @@ type Config struct {
 func Load(version string) (Config, error) {
 	conf := Config{}
 	flag.StringVar(&conf.FilterFile, "filter-file", "",
-		"TODO")
+		"filename written in filter rules")
 	flag.BoolVar(&conf.IsDebug, "is-debug", false,
-		"TODO")
+		"if this is true, output debug message to stdout.")
 	flag.StringVar(&conf.Endpoint, "etcd-endpoint", "http://localhost:2379/",
-		"TODO")
+		"etcd endpoint URL")
 	flag.StringVar(&conf.Username, "etcd-username", "",
-		"TODO")
+		"etcd username (allow empty)")
 	flag.StringVar(&conf.Password, "etcd-password", "",
-		"TODO")
+		"etcd password (allow empty)")
 	flag.StringVar(&conf.CertificateFile, "etcd-cert-file", "",
-		"TODO")
+		"certification filename for etcd (allow empty)")
 	flag.StringVar(&conf.CertificateKeyFile, "etcd-key-file", "",
-		"TODO")
+		"certification-key filename for etcd (allow empty)")
 	flag.StringVar(&conf.BasePath, "etcd-base-path", "",
-		"TODO")
+		"etcd base path written by external-dns & read by CoreDNS")
 	flag.StringVar(&conf.GcpCredentialFile, "gcp-credential", "",
-		"TODO")
+		"GCP credential filename")
 	flag.StringVar(&conf.GcpProject, "gcp-project", "",
-		"TODO")
+		"GCP Project belonged Cloud DNS")
 	flag.StringVar(&conf.GcpDnsManagedZone, "gcp-dns-managed-zone", "",
-		"TODO")
+		"Managed Zone name of Cloud DNS")
 
 	flag.VisitAll(func(f *flag.Flag) {
 		if s := os.Getenv(strings.ToUpper(strings.ReplaceAll(f.Name, "-", "_"))); s != "" {
