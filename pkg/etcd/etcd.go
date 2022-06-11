@@ -36,7 +36,7 @@ func Watch(ctx context.Context, conf config.Config) (clientv3.WatchChan, error) 
 type CoreDnsRecord struct {
 	Host        string `json:"host,omitempty"`
 	TTL         int64  `json:"ttl,omitempty" default:"60"`
-	TargetStrip int    `json:"target_strip,omitempty"`
+	TargetStrip int    `json:"targetstrip,omitempty"`
 }
 
 func MarshalRecord(b []byte) (*CoreDnsRecord, error) {
