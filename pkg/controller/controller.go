@@ -2,14 +2,13 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 
-	"github.com/creasty/defaults"
 	"github.com/go-logr/logr"
 	"google.golang.org/api/dns/v1"
 	dnsv1 "google.golang.org/api/dns/v1"
 
+	"github.com/ShotaKitazawa/record-syncer/pkg/etcd"
 	"github.com/ShotaKitazawa/record-syncer/pkg/models"
 	"github.com/ShotaKitazawa/record-syncer/pkg/replace"
 )
@@ -24,15 +23,16 @@ type Reconciler struct {
 }
 
 func (r Reconciler) Reconcile(ctx context.Context, res models.WatchResponse) error {
-	domain := r.getDomain(res.Key)
+	record, err := etcd.MarshalRecord(res.Value)
+	if err != nil {
+		return err
+	}
+	record.Host = r.Replacer.ReplaceRecord(record.Host)
+	domain := r.getDomain(res.Key, record.TargetStrip)
+
 	switch res.Type {
 	case models.PUT:
 		r.Log.Info("PUT", "key", string(res.Key), "value", string(res.Value))
-		record, err := r.marshalRecord(res.Value)
-		if err != nil {
-			return err
-		}
-		record.Host = r.Replacer.ReplaceRecord(record.Host)
 		rrSets, err := r.DnsService.List(r.Project, r.ManagedZone).Do()
 		if err != nil {
 			return err
@@ -71,11 +71,12 @@ func (r Reconciler) Reconcile(ctx context.Context, res models.WatchResponse) err
 	return nil
 }
 
-func (r Reconciler) getDomain(b []byte) string {
+func (r Reconciler) getDomain(b []byte, targetStrip int) string {
 	l := strings.Split(strings.TrimLeft(string(b), r.BasePath), "/")
 	for i := 0; i < len(l)/2; i++ {
 		l[i], l[len(l)-i-1] = l[len(l)-i-1], l[i]
 	}
+	l = l[targetStrip:]
 	return strings.Join(append(l, ""), ".")
 }
 
@@ -91,20 +92,4 @@ func (r Reconciler) contain(rrsets []*dns.ResourceRecordSet, name, hostname stri
 		}
 	}
 	return false, false
-}
-
-type coreDnsRecord struct {
-	Host string `json:"host"`
-	TTL  int64  `json:"ttl" default:"60"`
-}
-
-func (r Reconciler) marshalRecord(b []byte) (*coreDnsRecord, error) {
-	record := &coreDnsRecord{}
-	if err := json.Unmarshal(b, record); err != nil {
-		return nil, err
-	}
-	if err := defaults.Set(record); err != nil {
-		return nil, err
-	}
-	return record, nil
 }
