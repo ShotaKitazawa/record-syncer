@@ -14,26 +14,52 @@ import (
 )
 
 type Reconciler struct {
-	Log         logr.Logger
-	Replacer    *replace.Replacer
-	DnsService  *dnsv1.ResourceRecordSetsService
-	Project     string
-	ManagedZone string
-	BasePath    string
+	log         logr.Logger
+	replacer    *replace.Replacer
+	etcdClient  *etcd.Client
+	dnsService  *dnsv1.ResourceRecordSetsService
+	project     string
+	managedZone string
+	basePath    string
+
+	domainStorage map[string]string
 }
 
-func (r Reconciler) Reconcile(ctx context.Context, res models.WatchResponse) error {
-	record, err := etcd.MarshalRecord(res.Value)
+func NewReconciler(l logr.Logger, replacer *replace.Replacer, etcdClient *etcd.Client,
+	dnsService *dnsv1.ResourceRecordSetsService, project string, managedZone string, basePath string,
+) *Reconciler {
+	return &Reconciler{l, replacer, etcdClient, dnsService, project, managedZone, basePath, make(map[string]string)}
+}
+
+func (r Reconciler) Initialize(ctx context.Context) error {
+	l, err := r.etcdClient.List(ctx, r.basePath)
 	if err != nil {
 		return err
 	}
-	record.Host = r.Replacer.ReplaceRecord(record.Host)
-	domain := r.getDomain(res.Key, record.TargetStrip)
+	for _, kv := range l {
+		if err := r.Reconcile(ctx, models.WatchResponse{
+			Type:  models.PUT,
+			Key:   kv.Key,
+			Value: kv.Value,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
+func (r Reconciler) Reconcile(ctx context.Context, res models.WatchResponse) error {
 	switch res.Type {
 	case models.PUT:
-		r.Log.Info("PUT", "key", string(res.Key), "value", string(res.Value))
-		rrSets, err := r.DnsService.List(r.Project, r.ManagedZone).Do()
+		record, err := etcd.MarshalRecord(res.Value)
+		if err != nil {
+			return err
+		}
+		record.Host = r.replacer.ReplaceRecord(record.Host)
+		domain := r.getDomain(res.Key, record.TargetStrip)
+
+		r.log.Info("PUT", "key", string(res.Key), "value", string(res.Value))
+		rrSets, err := r.dnsService.List(r.project, r.managedZone).Do()
 		if err != nil {
 			return err
 		}
@@ -41,8 +67,8 @@ func (r Reconciler) Reconcile(ctx context.Context, res models.WatchResponse) err
 		if recordIsSame {
 			// pass
 		} else if nameExists {
-			if _, err := r.DnsService.Patch(
-				r.Project, r.ManagedZone, domain, "A", &dnsv1.ResourceRecordSet{
+			if _, err := r.dnsService.Patch(
+				r.project, r.managedZone, domain, "A", &dnsv1.ResourceRecordSet{
 					Kind:    "dns#resourceRecordSet",
 					Name:    domain,
 					Type:    "A",
@@ -52,7 +78,7 @@ func (r Reconciler) Reconcile(ctx context.Context, res models.WatchResponse) err
 				return err
 			}
 		} else {
-			if _, err := r.DnsService.Create(r.Project, r.ManagedZone, &dnsv1.ResourceRecordSet{
+			if _, err := r.dnsService.Create(r.project, r.managedZone, &dnsv1.ResourceRecordSet{
 				Kind:    "dns#resourceRecordSet",
 				Name:    domain,
 				Type:    "A",
@@ -62,17 +88,24 @@ func (r Reconciler) Reconcile(ctx context.Context, res models.WatchResponse) err
 				return err
 			}
 		}
+		r.domainStorage[string(res.Key)] = domain
+
 	case models.DELETE:
-		r.Log.Info("DELETE", "key", string(res.Key))
-		if _, err := r.DnsService.Delete(r.Project, r.ManagedZone, domain, "A").Do(); err != nil {
+		domain, ok := r.domainStorage[string(res.Key)]
+		if !ok {
+			domain = string(res.Key)
+		}
+		r.log.Info("DELETE", "key", string(res.Key))
+		if _, err := r.dnsService.Delete(r.project, r.managedZone, domain, "A").Do(); err != nil {
 			return err
 		}
+		delete(r.domainStorage, string(res.Key))
 	}
 	return nil
 }
 
 func (r Reconciler) getDomain(b []byte, targetStrip int) string {
-	l := strings.Split(strings.TrimLeft(string(b), r.BasePath), "/")
+	l := strings.Split(strings.TrimLeft(string(b), r.basePath), "/")
 	for i := 0; i < len(l)/2; i++ {
 		l[i], l[len(l)-i-1] = l[len(l)-i-1], l[i]
 	}

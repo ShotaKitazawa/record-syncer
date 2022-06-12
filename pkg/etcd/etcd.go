@@ -12,7 +12,9 @@ import (
 	"github.com/creasty/defaults"
 )
 
-func Watch(ctx context.Context, conf config.Config) (clientv3.WatchChan, error) {
+type Client clientv3.Client
+
+func New(conf config.Config) (*Client, error) {
 	c := clientv3.Config{
 		Endpoints:   []string{conf.Endpoint},
 		Username:    conf.Username,
@@ -30,7 +32,33 @@ func Watch(ctx context.Context, conf config.Config) (clientv3.WatchChan, error) 
 	if err != nil {
 		return nil, err
 	}
-	return cli.Watch(ctx, conf.BasePath, clientv3.WithPrefix()), nil
+	result := Client(*cli)
+	return &result, nil
+}
+
+type KeyValue struct {
+	Key   []byte
+	Value []byte
+}
+
+func (c Client) List(ctx context.Context, prefix string) ([]KeyValue, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	opts := []clientv3.OpOption{clientv3.WithPrefix()}
+	resp, err := c.Get(ctx, prefix, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	result := []KeyValue{}
+	for _, respKv := range resp.Kvs {
+		result = append(result, KeyValue{
+			Key:   respKv.Key,
+			Value: respKv.Value,
+		})
+	}
+	return result, nil
 }
 
 type CoreDnsRecord struct {

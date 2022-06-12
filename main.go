@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	clientv3 "go.etcd.io/etcd/client/v3"
 	dnsv1 "google.golang.org/api/dns/v1"
 	"google.golang.org/api/option"
 
@@ -28,34 +29,30 @@ const (
 
 func main() {
 	ctx := context.Background()
-
 	// from env vars
 	conf, err := config.Load(appVersion, appCommit)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-
 	// Logger
 	log, err := logger.New(conf.IsDebug)
 	if err != nil {
 		panic(err)
 	}
-
 	// Replacer
 	replacer, err := replace.New(conf.FilterFile)
 	if err != nil {
 		log.Error(err, "failed to initialize replacer")
 		os.Exit(1)
 	}
-
 	// Etcd
-	stream, err := etcd.Watch(ctx, conf)
+	etcdClient, err := etcd.New(conf)
 	if err != nil {
 		log.Error(err, "failed to initialize Etcd client")
 		os.Exit(1)
 	}
-
+	stream := etcdClient.Watch(ctx, conf.BasePath, clientv3.WithPrefix())
 	// CloudDNS
 	dnsService, err := dnsv1.NewService(ctx,
 		option.WithCredentialsFile(conf.GcpCredentialFile),
@@ -64,16 +61,16 @@ func main() {
 		log.Error(err, "failed to initialize CloudDNS client")
 		os.Exit(1)
 	}
-
-	r := controller.Reconciler{
-		Log:         log,
-		Replacer:    replacer,
-		DnsService:  dnsv1.NewResourceRecordSetsService(dnsService),
-		Project:     conf.GcpProject,
-		ManagedZone: conf.GcpDnsManagedZone,
-		BasePath:    conf.BasePath,
+	// Controller
+	r := controller.NewReconciler(log, replacer, etcdClient,
+		dnsv1.NewResourceRecordSetsService(dnsService),
+		conf.GcpProject, conf.GcpDnsManagedZone, conf.BasePath,
+	)
+	if err := r.Initialize(ctx); err != nil {
+		log.Error(err, "failed to initialize Reconciler")
+		os.Exit(1)
 	}
-
+	// main loop
 	tick := time.Tick(defaultInterval)
 	for {
 		select {
