@@ -23,10 +23,6 @@ var (
 	appCommit  = "not_specified"
 )
 
-const (
-	defaultInterval = time.Minute * 10
-)
-
 func main() {
 	ctx := context.Background()
 	// from env vars
@@ -66,27 +62,28 @@ func main() {
 		dnsv1.NewResourceRecordSetsService(dnsService),
 		conf.GcpProject, conf.GcpDnsManagedZone, conf.BasePath,
 	)
-	if err := r.Initialize(ctx); err != nil {
+	if err := r.Resync(ctx); err != nil {
 		log.Error(err, "failed to initialize Reconciler")
 		os.Exit(1)
 	}
 	// main loop
-	tick := time.Tick(defaultInterval)
+	tick := time.Tick(time.Duration(conf.ResyncPeriodMinutes) * time.Minute)
 	for {
 		select {
 		case res := <-stream:
 			for _, e := range res.Events {
-				err := r.Reconcile(ctx, models.WatchResponse{
+				if err := r.Reconcile(ctx, models.WatchResponse{
 					Type:  models.EventType(e.Type),
 					Key:   e.Kv.Key,
 					Value: e.Kv.Value,
-				})
-				if err != nil {
+				}); err != nil {
 					log.Error(err, "reconcile failed")
 				}
 			}
 		case <-tick:
-			// TODO
+			if err := r.Resync(ctx); err != nil {
+				log.Error(err, "resync failed")
+			}
 		}
 	}
 }

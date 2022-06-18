@@ -31,7 +31,7 @@ func NewReconciler(l logr.Logger, replacer *replace.Replacer, etcdClient *etcd.C
 	return &Reconciler{l, replacer, etcdClient, dnsService, project, managedZone, basePath, make(map[string]string)}
 }
 
-func (r Reconciler) Initialize(ctx context.Context) error {
+func (r Reconciler) Resync(ctx context.Context) error {
 	l, err := r.etcdClient.List(ctx, r.basePath)
 	if err != nil {
 		return err

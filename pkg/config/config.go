@@ -8,8 +8,9 @@ import (
 )
 
 type Config struct {
-	FilterFile string
-	IsDebug    bool
+	ResyncPeriodMinutes int
+	FilterFile          string
+	IsDebug             bool
 	// for Etcd
 	Endpoint           string
 	Username           string
@@ -29,6 +30,8 @@ func Load(version, commit string) (Config, error) {
 		"show version")
 
 	var conf Config
+	flag.IntVar(&conf.ResyncPeriodMinutes, "resync-period-minuts", 30,
+		"frequency of controller's resync period")
 	flag.StringVar(&conf.FilterFile, "filter-file", "",
 		"filename written in filter rules")
 	flag.BoolVar(&conf.IsDebug, "is-debug", false,
